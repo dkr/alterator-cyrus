@@ -1,0 +1,325 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN" "http://www.w3.org/TR/REC-html40/strict.dtd">
+<!-- cyrus-imap administration module -->
+<html wf="none">
+  <head>
+    <title>Cyrus-IMAP - ALT Linux Console</title>
+  </head>
+  <body>
+    <p style="text-align:right"><a href="/services?name=cyrus-imapd"><span translate="_">start, stop or restart service</span></a></p>
+<hr/>
+    <form method="POST">
+      <table border="0">
+        <thead>
+           <tr>
+              <th><span translate="_">IMAP settings</span></th>
+              <th><span translate="_">IMAP Options</span></th>
+              <th><span translate="_">Cyrus settings</span></th>
+           </tr>
+        </thead>
+	<tbody>
+	  <tr>
+           <td>
+             <table  class="form-table" border="0"><tbody>
+	        <tr>
+	                <td><span translate="_">Server name</span></td>
+	                <td><input type="text" class="text" name="servername" style="width:200px;" /></td>
+	        </tr>
+	        <tr>
+	                <td><span translate="_">Default domain</span></td>
+	                <td><input type="text" class="text" name="defaultdomain" style="width:200px;"/></td>
+	        </tr>
+	        <tr>
+	                <td><span translate="_">SASL mech list</span></td>
+	                <td><input type="text" class="text" name="sasl_mech_list" style="width:200px;"/></td>
+	        </tr>
+                <tr>
+	                <td><span translate="_">Cyrus admins</span></td>
+	                <td><input type="text" class="text" name="admins" style="width:200px;"/></td>
+	        </tr>
+	        <tr>
+	                <td><span translate="_">SASL pwcheck method</span></td>
+	                <td>
+	                <select name="sasl_pwcheck_method" style="width:130px;" size="1">
+	                  <option value="auxprop">auxprop</option>
+	                  <option value="saslauthd">saslauthd</option>
+	                  <option value="pwcheck">pwcheck</option>
+	                </select>
+	                <input type="button" class="btn" name="updt_sasl" value="Setings" style="display:none"></input>
+	                <input type="button" class="btn" name="manage_sasl" value="Users" style="display:none"></input>
+	                </td>
+	        </tr>
+	        <tr>
+	                <td><span translate="_">Virtual domains</span></td>
+	                <td>
+	                <input type="checkbox" name="use_virtdomains"/>
+	                <select name="virtdomains" style="width:100px;" size="1">
+	                  <option value="off">off</option>
+	                  <option value="on">on</option>
+	                  <option value="userid">userid</option>
+	                </select>
+	                </td>
+	        </tr>
+	        <tr><td>POPminpoll</td>
+	    		<td><input type="checkbox" name="use_popminpoll"/>
+	    		<input type="text" class="text" name="popminpoll" style="width:50px;"/>
+	    		&nbsp;<span translate="_">min.</span></td>
+	        </tr>
+	        <tr><td>POPtimeout</td>
+	    		<td><input type="checkbox" name="use_poptimeout"/>
+	    		<input type="text" class="text" name="poptimeout" style="width:50px;"/>
+	    		&nbsp;<span translate="_">min.</span></td>
+	        </tr>
+	        <tr>
+                       <td><span translate="_">Autocreate:</span>&nbsp;</td>
+                       <td colspan="3"><input type="checkbox" name="use_autocreateinboxfolders"/>
+	               <input type="text" class="text" name="autocreateinboxfolders" style="width:220px;"/>
+	               </td>
+	        </tr>
+	        <tr><td></td>
+	        <td colspan="3"><span translate="_">Separated by |</span></td>
+	        </tr>
+	        <tr>
+                       <td><span translate="_">Autosubscribe:</span>&nbsp;</td>
+                       <td colspan="3"><input type="checkbox" name="use_autosubscribeinboxfolders"/>
+	               <input type="text" class="text" name="autosubscribeinboxfolders" style="width:220px;"/>
+	               </td>
+	        </tr>
+	        <tr><td></td>
+	        <td colspan="3"><span translate="_">Separated by |</span></td>
+	        </tr>
+	        <tr>
+	    	       <td>Autocreate quota:</td>
+                       <td colspan="3">
+                       <input type="checkbox" name="use_autocreatequota"/>&nbsp;
+                       <input type="text" class="text" name="autocreatequota" style="width:100px;"/>
+                          <span translate="_">kb.</span>
+                       </td>
+	        </tr>
+	        <tr>
+                       <td><span translate="_">Default sieve script:</span>&nbsp;</td>
+                       <td colspan="3"><input type="checkbox" name="use_autocreate_sieve_script"/>
+                       /var/lib/imap/sieve/
+	               <input type="text" class="text" name="autocreate_sieve_script" style="width:70px;"/>
+	               <input type="button" class="btn" name="edit_def_sieve" value="Edit"></input>
+	               <input type="button" class="btn" name="save_def_sieve" value="Save" style="display:none"></input>
+	               </td>
+	        </tr>
+	        <tr><td colspan="3">
+	        <textarea rows="5" name="sieve_script" style="width:98%;display:none"/>
+	        </td></tr>
+	     </tbody></table>
+           </td>
+
+           <td>
+           <table><tbody>
+        	<tr><td><input type="checkbox" name="allowapop"/></td><td>
+                    <span translate="_">allowapop.</span></td></tr>
+	        <tr><td><input type="checkbox" name="createonpost"/></td><td>
+                    <span translate="_">createonpost.</span></td></tr>
+                <tr><td><input type="checkbox" name="anysievefolder"/></td><td>
+                    <span translate="_">anysievefolder.</span></td></tr>
+                <tr><td> <input type="checkbox" name="hashimapspool"/></td><td>
+                    <span translate="_">hashimapspool.</span></td></tr>
+                <tr><td> <input type="checkbox" name="username_tolower"/></td><td>
+                    <span translate="_">username_tolower.</span></td></tr>
+	        <tr><td> <input type="checkbox" name="unixhierarchysep"/></td><td>
+                    <span translate="_">unixhierarchysep.</span></td></tr>
+	        <tr><td> <input type="checkbox" name="lmtp_downcase_rcpt"/></td><td>
+                    <span translate="_">lmtp_downcase_rcpt.</span></td></tr>
+                <tr><td> <input type="checkbox" name="imapidresponse"/></td><td>
+                    <span translate="_">imapidresponse.</span></td></tr>
+           </tbody></table>
+           </td>
+
+           <td>
+             <table><tbody>
+	        <tr><td><input type="checkbox" name="imap_port" />
+                        <span translate="_">imap (143)</span></td></tr>
+	        <tr><td><input type="checkbox" name="imaps_port" />
+                        <span translate="_">imaps (993)</span></td></tr>
+	        <tr><td><input type="checkbox" name="pop3_port" />
+                        <span translate="_">pop3 (110)</span></td></tr>
+	        <tr><td align="left"><input type="checkbox" name="pop3s_port" />
+                        <span translate="_">pop3s (995)</span></td></tr>
+	        <tr><td align="left"><input type="checkbox" name="nntp_port" />
+                        <span translate="_">nntp (119)</span></td></tr>
+	        <tr><td align="left"><input type="checkbox" name="nntps_port" />
+                        <span translate="_">nntps (563)</span></td></tr>
+	        <tr><td align="left"><input type="checkbox" name="sieve_port" />
+                        <span translate="_">sieve (2000)</span></td></tr>
+	        <tr><td align="left"><input type="checkbox" name="notify" />
+                        <span translate="_">notify daemon</span></td></tr>
+	        <tr><td align="left"><input type="radio" name="socket_type" value="lmtp"/>
+                       <span translate="_">lmtp</span>
+                       <input type="checkbox" name="lmtp_localonly"/>&nbsp;
+                       <span translate="_">localhost only</span></td></tr>
+	        <tr><td><input type="radio" name="socket_type" value="lmtpunix"/>
+	               <span translate="_">lmtpunix</span>
+	               <span translate="_">. Socket path:</span></td></tr>
+	        <tr><td align="left">
+	               <input type="text" class="text" name="socket_path" style="width:180px;"/>
+	               </td></tr>
+	     </tbody></table>
+           </td>
+	  </tr>
+	  <tr>
+	    <td colspan="3">
+	    <input type="checkbox" name="use_tls" /><span translate="_">Use TLS.</span>
+	    <span translate="_">Current certificate</span>
+                <span class="alterator-label" name="valid"/>&nbsp;
+                <input type="button" class="btn" name="updt_cert" value="Update"></input>
+            </td>
+          </tr>
+	</tbody>
+      </table>
+      <br/>
+      <table  class="form-table" border="0" name="sasl_area" style="display:none">
+        <thead>
+           <tr>
+              <th colspan="2"><span translate="_">SASL auth daemon settings</span></th>
+           </tr>
+        </thead>
+        <tbody>
+            <tr>
+		<td><span translate="_">Server LDAP</span></td>
+	        <td><input type="text" class="text" name="ldap_servers" style="width:300px;" /></td>
+	    </tr>
+	    <tr>
+		<td><span translate="_">Bind DN</span></td>
+	        <td><input type="text" class="text" name="ldap_bind_dn" style="width:300px;" /></td>
+	    </tr>
+	    <tr>
+		<td><span translate="_">Bind PW</span></td>
+	        <td><input type="text" class="text" name="ldap_bind_pw" style="width:300px;" /></td>
+	    </tr>
+	    <tr>
+		<td><span translate="_">Search base</span></td>
+	        <td><input type="text" class="text" name="ldap_search_base" style="width:300px;" /></td>
+	    </tr>
+	    <tr>
+		<td><span translate="_">Filter LDAP</span></td>
+	        <td><input type="text" class="text" name="ldap_filter" style="width:300px;" /></td>
+	    </tr>
+           </tbody></table>
+      <table class="form-table" name="auxprop_area" style="display:none">
+        <thead>
+           <tr>
+              <th colspan="3"><span translate="_">Users in sasldb</span></th>
+           </tr>
+        </thead>
+        <tbody>
+            <tr>
+		<td colspan="3">
+		    <select name="sasldb_users" size="10" style="width:400px" enumref="/cyrus/saslusers" />
+		</td>
+	    </tr>
+	    <tr>
+		<td>
+	    	    <span translate="_">Selected user:</span>&nbsp;
+	    	</td>
+		<td valign="middle">
+	    	    <strong><span class="alterator-label" name="sel_username"/></strong>
+		</td>
+		<td>
+		    <input type="button" class="btn" name="del_sasluser" value="Delete" style="width:50px;"/>
+		</td>
+	    </tr>
+	    <tr>
+	        <td>
+	    	</td>
+		<td>
+		    <span translate="_">New password:</span>&nbsp;
+	    	    <input type="text" class="text" name="saslpasswd" style="width:150px;" />
+	    	</td>
+		<td>
+		    <input type="button" class="btn" name="set_passwd" value="Set" style="width:50px;"/><br/>
+		</td>
+	    </tr>
+	    <tr>
+		<td>
+	    	    <span translate="_">New user:</span>&nbsp;
+	    	</td>
+		<td>
+	    	    <input type="text" class="text" name="new_sasluser" style="width:250px;"/>
+		</td>
+		<td>
+		    <input type="button" class="btn" name="add_sasluser" value="Add" style="width:50px;"/><br/>
+		</td>
+	    </tr>
+	    <tr>
+	    <td colspan="3">
+		<div name="notifycation" class="alterator-information-message" style="float:none;display:none">
+		<img src="/design/images/information.gif"/>
+		<span translate="_">User created with a random password.</span>
+		<br/>
+		<span translate="_">Please, select this user and set a new password to him.</span>
+		</div>
+	    </td>
+	    </tr>
+           </tbody></table>
+      <table  class="form-table" border="0" name="pwcheck_area" style="display:none">
+        <thead>
+           <tr>
+              <th colspan="2"><span translate="_">Auxprop plugins</span></th>
+           </tr>
+        </thead>
+        <tbody>
+            <tr>
+		<td>Not</td>
+	        <td>implemented now...</td>
+	    </tr>
+           </tbody></table>
+           
+    <hr/>
+      <input type="submit" value="Apply" class="btn"/>
+      <input type="reset" value="Reset" class="btn"/>
+    </form>
+    <br/>
+    <div name="cert_area" style="display:none;">
+    <h3><span translate="_">TLS Certificate</span></h3>
+      <form method="POST" action="?action=recreate">
+      <table class="form-table" border="0">
+	<tbody>
+	  <tr>
+	    <td style="text-align:right"><span translate="_">Common Name (CN)</span></td>
+	    <td style="padding-bottom: 2px"><input type="text" name="CN" class="text"/></td>
+            <td><small>(<span translate="_">should be a FQDN hostname</span>)</small></td>
+	  </tr>
+	  <tr>
+	    <td style="text-align:right"><span translate="_">Country (C)</span></td>
+	    <td style="padding-bottom: 2px"><input type="text" name="C" class="text"/></td>
+            <td><small>(<span translate="_">two letter country code</span>)</small></td>
+	  </tr>
+	  <tr>
+	    <td style="text-align:right"><span translate="_">Location (L)</span></td>
+	    <td style="padding-bottom: 2px"><input type="text" name="L" class="text"/></td>
+            <td><small>(<span translate="_">state or city, written in latin letters</span>)</small></td>
+	  </tr>
+	  <tr>
+	    <td style="text-align:right"><span translate="_">Organization (O)</span></td>
+	    <td style="padding-bottom: 2px"><input type="text" name="O" class="text"/></td>
+            <td><small>(<span translate="_">organization name, written in latin letters</span>)</small></td>
+	  </tr>
+	  <tr>
+	    <td style="text-align:right"><span translate="_">Organizational Unit (OU)</span></td>
+	    <td style="padding-bottom: 2px"><input type="text" name="OU"  class="text"/></td>
+            <td><small>(<span translate="_">organizational unit name, written in latin letters</span>)</small></td>
+	  </tr>
+	</tbody>
+      </table>
+      <br/>
+      <input type="submit" name="tls_reset" value="Recreate" class="btn"/>
+      <small>(<span translate="_">recreate private key, sign request and self-signed certificate</span>)</small>
+    </form></div>
+    <p/>
+<!--    <form method="POST" action="?action=upload" enctype="multipart/form-data">
+      <a href="/fbi/cyrus.csr">
+        <span translate="_">Download sign request</span>
+      </a>
+      <br/>
+       <span translate="_">Upload certificate signed by CA</span>
+       <input type="file" name="certificate" class="text"/>&nbsp;
+       <input type="submit" value="Upload" class="btn"/>
+    </form>-->
+  </body>
+</html>

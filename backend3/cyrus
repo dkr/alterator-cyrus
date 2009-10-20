@@ -1,0 +1,516 @@
+#!/bin/sh
+
+alterator_api_version=1
+po_domain="alterator-cyrus"
+
+set -f
+
+. alterator-sh-functions
+. shell-config
+. shell-quote
+. cert-sh-functions
+
+cyrus_file="/etc/cyrus.conf"
+imap_file="/etc/imapd.conf"
+sasl_file="/etc/sasl2/saslauthd.conf"
+servername="cyrus"
+certconffile="/etc/alterator/cyrus/cyrus.cnf"
+certfile="/var/lib/imap/ssl/cyrus.cert"
+keyfile="/var/lib/imap/ssl/cyrus.key"
+
+rdelim='[[:space:]]\+'
+wdelim='	'
+
+hostname_re='^[a-zA-Z_][.a-zA-Z0-9_-]*$'
+country_re='^[a-zA-Z][a-zA-Z]$'
+name_re='^[a-zA-Z_[:space:]]\+$'
+
+shell_get()
+{
+        local name=$1
+        case "$name" in
+    	    ldap_servers|\
+    	    ldap_bind_dn|\
+    	    ldap_search_base|\
+    	    ldap_filter)
+    		sed -rn "s,^$name\s*:\s*'?([^']*)'?$,\1,p" -- "$sasl_file"
+    	    ;;
+    	    *)
+    		sed -rn "s,^$name\s*:\s*'?([^']*)'?$,\1,p" -- "$imap_file"
+    	    ;;
+        esac
+}
+
+test_bool()
+{
+    local name="$1"
+    local file="$2"
+    case "$name" in
+    lmtp_bind)
+    if (grep -qs "127.0.0.1:lmtp" "$file");then
+        printf "yes"
+    else
+        printf "no"
+    fi
+    ;;
+    createonpost|\
+    anysievefolder|\
+    hashimapspool|\
+    username_tolower|\
+    unixhierarchysep|\
+    lmtp_downcase_rcpt|\
+    imapidresponse|\
+    allowapop)
+    if grep -qs "^[[:space:]]*$name[:[:space:]]\+" "$file";then
+	value=`sed -rn "s,^$name\s*:\s*'?([^']*)'?$,\1,p" -- "$file"`
+        case "$value" in
+    	    [y][e][s]|[t][r][u][e]|[o][n]|[t]|1)
+        	printf "yes"
+            ;;
+    	    *)
+        	printf "no"
+            ;;
+	esac
+    else
+        printf "no"
+    fi
+    ;;
+    pop3|pop3s|imap|imaps|nntp|nntps|sieve|notify)
+    if grep -qs "^[[:space:]]*$name[:[:space:]]\+" "$file";then
+        printf "yes"
+    else
+        printf "no"
+    fi
+    ;;
+    *)
+    if (grep -qs "^[[:space:]]*$name[:[:space:]]" "$file");then
+        printf "yes"
+    else
+        printf "no"
+    fi
+    ;;
+    esac
+}
+
+shell_set()
+{
+    local name="$1";shift;
+    quote_sed_regexp_variable value "$1";shift;
+    local msg="${1:-invalid value}"
+    case "$name" in
+	ldap_servers|\
+    	ldap_bind_dn|\
+    	ldap_bind_pw|\
+    	ldap_search_base|\
+    	ldap_filter)
+    	    file=$sasl_file
+	;;
+	*)
+	    file=$imap_file
+	;;
+    esac
+    if [ -n "$name" -a -n "$value" ];then
+	sed -e "/^$name:/s/.*/$name: $value/g" -i "$file"
+    else
+	write_error "$msg"
+	return 1
+    fi
+    return 0
+}
+
+cert_get()
+{
+    write_string "$(shell_config_get "$certconffile" "$1")"
+}
+
+cert_set()
+{
+    local name="$1";shift;
+    local value="$1";shift;
+    local re="$1";shift;
+    local msg="${1:-invalid value}"
+
+    if [ -n "$name" ];then
+	if echo "$value"|grep -qs "$re"; then
+	    shell_config_set "$certconffile" "$name" "$value"
+	else
+	    write_error "$msg"
+	    return 1
+	fi
+    fi
+    return 0
+}
+
+sure_certconf()
+{
+    [ -f "$certconffile" ] && return
+    local HOSTNAME="$(hostname)"
+    HOSTNAME="${HOSTNAME:-localhost.localdomain}"
+
+    echo "$DEFAULT_CERT" |
+	sed -e "s|@HOSTNAME@|$HOSTNAME|" \
+	    -e "s|@PRODUCT@|$servername|" \
+	    -e "/^O=/ a C=RU\nL=Moscow\nOU=IMAP Server\n" \
+	    >"$certconffile"
+}
+
+create_cert()
+{
+      ssl_make_key "$@"
+      ssl_make_req "$@"
+      ssl_make_cert "$@"
+}
+
+do_reload()
+{
+    sleep 1
+    /sbin/service cyrus-imapd reload >/dev/null 2>/dev/null
+}
+
+get_expire_date()
+{
+    local cert="$1"; shift
+    local d="$(openssl x509 -text -noout -in "$cert" | sed -nr 's/^[[:blank:]]*Not After : (.+)$/\1/p' 2>/dev/null)"
+
+    [ -n "$d" ] && date --date="$d" +%x%t%H:%M
+}
+
+validate_cert()
+{
+   if [ -f "$certfile" ]; then
+    expire="$(get_expire_date "$certfile")"
+    [ -n "$expire" ] && str="`_ "expire"`: $expire"
+   else
+     str="Certificate not found"
+   fi
+   printf "$str"
+}
+
+socket_get(){
+    grep  "lmtpunix" "$cyrus_file" |sed -e "s/\(.*listen=\"\)\(.*\)\(\".*\)/\2/"
+}
+
+update_cert()
+{
+    local key_path="/var/lib/imap/ssl"
+    [ -d "$key_path" ] || mkdir -p "$key_path"
+
+    (create_cert "$servername-temp" "$certconffile") &&
+        mv -f "$SSL_KEYDIR/$servername-temp.key" "$key_path/$servername.key" &&
+        mv -f "$SSL_CERTDIR/$servername-temp.cert" "$key_path/$servername.cert" &&
+        rm -rf "$SSL_CERTDIR/$servername-temp.csr" &&
+        chown -R cyrus.cyrus "$key_path" &&
+        chmod -R 600 "$key_path" &&
+        chmod 700 "$key_path"
+}
+
+open_port()
+{
+    sed -e "/^#\s\+$1\s/s/^#//g" -i "$cyrus_file"
+}
+
+close_port()
+{
+   sed -e "/^[^#]\s\+$1\s/s/.*/#&/g" -i "$cyrus_file" 
+}
+
+turn_option(){
+    local mode="$1";shift;
+    local option="$1";shift;
+    echo "$option $mode"
+case "$mode" in
+    on)
+    case "$option" in
+	createonpost|\
+	anysievefolder|\
+	hashimapspool|\
+	username_tolower|\
+	unixhierarchysep|\
+	lmtp_downcase_rcpt|\
+	imapidresponse|\
+	allowapop)
+	    sed -e "/^#$option:\s/s/^#//g" -i "$imap_file"
+	    shell_set "$option" "yes"
+	;;
+	*)
+	    sed -e "/^#$option:\s/s/^#//g" -i "$imap_file"
+	;;
+    esac
+    ;;
+    off)
+	sed -e "/^$option:\s/s/.*/#&/g" -i "$imap_file" 
+    ;;
+    *)
+    ;;
+esac
+}
+
+i_use_tls()
+{
+    quote_sed_regexp_variable key "$keyfile"
+    quote_sed_regexp_variable cert "$certfile"
+
+case "$1" in
+  on)
+   sed -e "/^#tls_cert_file:\s/s/^#//g" -i "$imap_file"
+   sed -e "/^#tls_key_file:\s/s/^#//g" -i "$imap_file"
+   sed -e "/^tls_cert_file:/s/.*/tls_cert_file: $cert/g" -i "$imap_file"
+   sed -e "/^tls_key_file:/s/.*/tls_key_file: $key/g" -i "$imap_file"
+  ;;
+  off)
+   sed -e "/^tls_cert_file:\s/s/.*/#&/g" -i "$imap_file"
+   sed -e "/^tls_key_file:\s/s/.*/#&/g" -i "$imap_file"
+  ;;
+  *)
+  ;;
+esac
+}
+
+set_bind(){
+case "$1" in
+    on)
+        sed -e "s/listen=\"lmtp\"/listen=\"127.0.0.1\:lmtp\"/g" -i "$cyrus_file" 
+    ;;
+    off)
+        sed -e "s/listen=\"127.0.0.1\:lmtp\"/listen=\"lmtp\"/g" -i "$cyrus_file" 
+    ;;
+    *)
+    ;;
+esac
+}
+
+set_socket(){
+case "$in_socket_type" in
+    lmtpunix)
+    sed -e "/^[^#]\s\+lmtp\s/s/.*/#&/g" -i "$cyrus_file" 
+    sed -e "/^#\s\+lmtpunix\s/s/^#//g" -i "$cyrus_file"
+    ;;
+    lmtp)
+    sed -e "/^[^#]\s\+lmtpunix\s/s/.*/#&/g" -i "$cyrus_file" 
+    sed -e "/^#\s\+lmtp\s/s/^#//g" -i "$cyrus_file"
+    ;;
+    *)
+    ;;
+esac
+}
+
+create_new_user(){
+    echo "$(pwqgen)" | saslpasswd2 -p -c "$in_new_sasluser"
+}
+
+read_sieve_script(){
+    if [ -f "$(shell_get "autocreate_sieve_script")" ]; then
+    write_string_param sieve_script "$(cat $(shell_get "autocreate_sieve_script"))"
+    else
+    write_string_param sieve_script "$(cat <<EOD
+# It is Autogenerated sieve template for all new users. 
+if allof (header :contains "X-Spam-Status:" "Yes" ) {
+   fileinto "INBOX/Junk";
+}
+EOD)"
+    fi
+}
+
+write_sieve_sctipt()
+{
+    quote_sed_regexp_variable scriptname "/var/lib/imap/sieve/$in_scriptname"
+
+    if [ -n "$in_scriptname" ]; then
+	[ -e "$in_scriptname" ] || touch /var/lib/imap/sieve/$in_scriptname
+	echo "$in_script" > /var/lib/imap/sieve/$in_scriptname
+	chown cyrus.cyrus /var/lib/imap/sieve/$in_scriptname
+	chmod 600 /var/lib/imap/sieve/$in_scriptname
+	sed -e "/^#autocreate_sieve_script:\s/s/^#//g" -i "$imap_file"
+	sed -e "/^#autocreate_sieve_compiledscript:\s/s/^#//g" -i "$imap_file"
+	sed -e "/^autocreate_sieve_script:/s/.*/autocreate_sieve_script: $scriptname/g" -i "$imap_file"
+	sed -e "/^autocreate_sieve_compiledscript:/s/.*/autocreate_sieve_compiledscript: $scriptname\.bc/g" -i "$imap_file"
+    fi
+}
+
+write_settings()
+{
+    # /etc/imapd.conf
+    [ -z "$in_admins" ] || shell_set "admins" "$in_admins"
+    [ -z "$in_servername" ] || shell_set "servername" "$in_servername"
+    [ -z "$in_defaultdomain" ] || shell_set "defaultdomain" "$in_defaultdomain"
+    [ -z "$in_sasl_pwcheck_method" ] || shell_set "sasl_pwcheck_method" "$in_sasl_pwcheck_method"
+    [ -z "$in_sasl_mech_list" ] || shell_set "sasl_mech_list" "$in_sasl_mech_list"
+    [ -z "$in_autocreatequota" ] || shell_set "autocreatequota" "$in_autocreatequota"
+    [ -z "$in_autocreateinboxfolders" ] || shell_set "autocreateinboxfolders" "$in_autocreateinboxfolders"
+    [ -z "$in_autosubscribeinboxfolders" ] || shell_set "autosubscribeinboxfolders" "$in_autosubscribeinboxfolders"
+    [ -z "$in_virtdomains" ] || shell_set "virtdomains" "$in_virtdomains"
+    #
+    [ -n "$in_use_virtdomains" ] && turn_option "on" "virtdomains" || turn_option "off" "virtdomains"
+    [ -n "$in_use_autocreatequota" ] && turn_option "on" "autocreatequota" || turn_option "off" "autocreatequota"
+    [ -n "$in_use_autocreateinboxfolders" ] && turn_option "on" "autocreateinboxfolders" || turn_option "off" "autocreateinboxfolders"
+    [ -n "$in_use_autosubscribeinboxfolders" ] && turn_option "on" "autosubscribeinboxfolders" || turn_option "off" "autosubscribeinboxfolders"
+    [ -n "$in_use_popminpoll" ] && turn_option "on" "popminpoll" || turn_option "off" "popminpoll"
+    [ -n "$in_use_poptimeout" ] && turn_option "on" "poptimeout" || turn_option "off" "poptimeout"
+    [ -n "$in_allowapop" ] && turn_option "on" "allowapop" || turn_option "off" "allowapop"
+    [ -n "$in_createonpost" ] && turn_option "on" "createonpost" || turn_option "off" "createonpost"
+    [ -n "$in_anysievefolder" ] && turn_option "on" "anysievefolder" || turn_option "off" "anysievefolder"
+    [ -n "$in_hashimapspool" ] && turn_option "on" "hashimapspool" || turn_option "off" "hashimapspool"
+    [ -n "$in_username_tolower" ] && turn_option "on" "username_tolower" || turn_option "off" "username_tolower"
+    [ -n "$in_unixhierarchysep" ] && turn_option "on" "unixhierarchysep" || turn_option "off" "unixhierarchysep"
+    [ -n "$in_lmtp_downcase_rcpt" ] && turn_option "on" "lmtp_downcase_rcpt" || turn_option "off" "lmtp_downcase_rcpt"
+    [ -n "$in_imapidresponse" ] && turn_option "on" "imapidresponse" || turn_option "off" "imapidresponse"
+    # /etc/cyrus.conf
+    [ -n "$in_imap_port" ] && open_port "imap" || close_port "imap"
+    [ -n "$in_imaps_port" ] && open_port "imaps" || close_port "imaps"
+    [ -n "$in_pop3_port" ] && open_port "pop3" || close_port "pop3"
+    [ -n "$in_pop3s_port" ] && open_port "pop3s" || close_port "pop3s"
+    [ -n "$in_nntp_port" ] && open_port "nntp" || close_port "nntp"
+    [ -n "$in_nntps_port" ] && open_port "nntps" || close_port "nntps"
+    [ -n "$in_sieve_port" ] && open_port "sieve" || close_port "sieve"
+    [ -n "$in_notify" ] && open_port "notify" || close_port "notify"
+    [ -n "$in_use_tls" ] && i_use_tls "on" || i_use_tls "off"
+    #
+    [ -n "$in_socket_type" ] && set_socket "$in_socket_type"
+    [ -n "$in_lmtp_localonly" ] && set_bind "on" || set_bind "off"
+    # /etc/sasl2/saslauthd.conf
+    [ -n "$in_ldap_servers" ] && shell_set "ldap_servers" "$in_ldap_servers"
+    [ -n "$in_ldap_bind_dn" ] && shell_set  "ldap_bind_dn" "$in_ldap_bind_dn" 
+    [ -n "$in_ldap_bind_pw" -a "$in_ldap_bind_pw" != "************" ] && shell_set  "ldap_bind_pw" "$in_ldap_bind_pw" 
+    [ -n "$in_ldap_search_base" ] &&  shell_set "ldap_search_base" "$in_ldap_search_base"
+    [ -n "$in_ldap_filter" ] &&  shell_set "ldap_filter" "$in_ldap_filter"
+}
+
+on_message()
+{
+	case "$in_action" in
+		constraints)
+		;;
+		delete)
+		case "$in__objects" in
+		    sasluser)
+			[ -n "$in_del_sasluser" ] && saslpasswd2 -d "$in_del_sasluser"
+		    ;;
+		esac
+		;;
+		new)
+		case "$in__objects" in
+		    sasluser)
+			[ -n "$in_new_sasluser" ] && create_new_user
+			
+		    ;;
+		esac
+		;;
+		read)
+		    case "$in__objects" in
+		    single)
+		       [ -z "$in_name" ] || write_string_param "$in_name" $(shell_get "$in_name")
+		    ;;
+		    *)
+		    write_string_param servername $(shell_get "servername")
+                    write_string_param defaultdomain $(shell_get "defaultdomain")
+                    write_string_param admins "$(shell_get admins)"
+                    write_string_param sasl_pwcheck_method $(shell_get "sasl_pwcheck_method")
+                    write_string_param sasl_mech_list $(shell_get "sasl_mech_list")
+                    write_string_param autosubscribeinboxfolders "$(shell_get "autosubscribeinboxfolders")"
+                    write_string_param autocreateinboxfolders "$(shell_get "autocreateinboxfolders")"
+		    write_string_param CN $(cert_get CN)
+		    write_string_param C $(cert_get C)
+		    write_string_param L $(cert_get L)
+		    write_string_param O $(cert_get O)
+		    write_string_param OU $(cert_get OU)
+                    write_string_param valid "$(validate_cert)"
+                    write_string_param socket_path "$(socket_get)"
+                    write_string_param virtdomains $(shell_get "virtdomains")
+                    write_string_param sasl_pwcheck_method $(shell_get "sasl_pwcheck_method")
+                    write_string_param poptimeout $(shell_get "poptimeout")
+                    write_string_param popminpoll $(shell_get "popminpoll")
+                    write_string_param autocreatequota $(shell_get "autocreatequota")
+                    write_string_param ldap_servers $(shell_get "ldap_servers")
+    		    write_string_param ldap_bind_dn $(shell_get "ldap_bind_dn")
+    		    write_string_param ldap_bind_pw "************"
+    		    write_string_param ldap_search_base $(shell_get "ldap_search_base")
+    		    write_string_param ldap_filter $(shell_get "ldap_filter")
+                    if grep -qs "^[^#][[:space:]]\lmtpunix[[:space:]]" "$cyrus_file";then
+                        write_string_param "socket_type" "lmtpunix"
+        	    else
+                        write_string_param "socket_type" "lmtp"
+	    	    fi
+	    	    write_string_param autocreate_sieve_script `basename $(shell_get "autocreate_sieve_script")`
+	    	    read_sieve_script
+	    	    
+                    #
+                    write_bool_param lmtp_localonly "$(test_bool "lmtp_bind" "$cyrus_file")"
+                    write_bool_param use_autosubscribeinboxfolders "$(test_bool "autosubscribeinboxfolders" "$imap_file")"
+                    write_bool_param use_autocreatequota "$(test_bool "autocreatequota" "$imap_file")"
+		    write_bool_param use_virtdomains "$(test_bool "virtdomains" "$imap_file")"
+		    write_bool_param use_popminpoll "$(test_bool "popminpoll" "$imap_file")"
+		    write_bool_param use_poptimeout "$(test_bool "poptimeout" "$imap_file")"
+		    write_bool_param use_autocreateinboxfolders "$(test_bool "autocreateinboxfolders" "$imap_file")"
+		    write_bool_param lmtp_downcase_rcpt "$(test_bool "lmtp_downcase_rcpt" "$imap_file")"
+		    write_bool_param createonpost "$(test_bool "createonpost" "$imap_file")"
+		    write_bool_param anysievefolder "$(test_bool "anysievefolder" "$imap_file")"
+		    write_bool_param hashimapspool "$(test_bool "hashimapspool" "$imap_file")"
+		    write_bool_param username_tolower "$(test_bool "username_tolower" "$imap_file")"
+		    write_bool_param unixhierarchysep "$(test_bool "unixhierarchysep" "$imap_file")"
+		    write_bool_param imapidresponse "$(test_bool "imapidresponse" "$imap_file")"
+		    write_bool_param allowapop "$(test_bool "allowapop" "$imap_file")"
+		    write_bool_param use_autocreate_sieve_script "$(test_bool "autocreate_sieve_script" "$imap_file")"
+		    #
+		    write_bool_param imap_port "$(test_bool "imap" "$cyrus_file")"
+		    write_bool_param imaps_port "$(test_bool "imaps" "$cyrus_file")"
+		    write_bool_param pop3_port "$(test_bool "pop3" "$cyrus_file")"
+		    write_bool_param pop3s_port "$(test_bool "pop3s" "$cyrus_file")"
+		    write_bool_param nntp_port "$(test_bool "nntp" "$cyrus_file")"
+		    write_bool_param nntps_port "$(test_bool "nntps" "$cyrus_file")"
+		    write_bool_param sieve_port "$(test_bool "sieve" "$cyrus_file")"
+		    write_bool_param notify "$(test_bool "notify" "$cyrus_file")"
+	    	    if (grep -qs "^tls_cert_file:[[:space:]]" "$imap_file" && [ -f "$certfile" ]);then
+                        write_bool_param use_tls yes
+                    else
+                        write_bool_param use_tls no
+	    	    fi
+	    	    ;;
+	    	    esac
+		;;
+		write)
+		case "$in__objects" in
+		    saslpasswd)
+			[ -n "$in_sasluser" -a -n "$in_password" ] \
+			&& echo "$in_password" | saslpasswd2 -p "$in_sasluser" \
+			|| write_error "No Password or User"
+		    ;;
+		    sieve_script)
+			write_sieve_sctipt
+		    ;;
+		    *)
+			write_settings
+		    ;;
+		esac
+		;;
+		recreate)
+			sure_certconf
+			cert_set "C" "$in_C" "$country_re" "invalid country code" || return
+			cert_set "L" "$in_L" "$name_re" "invalid location name" || return
+			cert_set "O" "$in_O" "$name_re" "invalid organization name"  || return
+			cert_set "OU" "$in_OU" "$name_re" "invalid organizational unit name" || return
+			cert_set "CN" "$in_CN" "$hostname_re" "invalid hostname" || return
+			update_cert
+                        ;;
+		reload)
+			do_reload
+			write_nop
+			;;
+		list)
+		case "$in__objects" in
+		    saslusers)
+			sasldblistusers2 | grep userPassword |\
+			while IFS=':' read user type; do
+			    write_enum_item "$user" "$user"
+			done 2>/dev/null
+		    ;;
+		    *)
+		    ;;
+		esac
+		;;
+		*)
+			echo '#f'
+			;;
+	esac
+}
+
+message_loop

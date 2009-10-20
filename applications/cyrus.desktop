@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Categories=X-Alterator-Servers
+Icon=cyrus
+Terminal=false
+Name=Cyrus-IMAP Settings
+Name[ru]=Настройка Cyrus-IMAP
+Name[uk]=Налаштування Cyrus-IMAP
+X-Alterator-URI=/cyrus
+X-Alterator-Weight=30
+X-Alterator-UI=html
+X-Alterator-Help=cyrus
